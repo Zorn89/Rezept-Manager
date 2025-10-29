@@ -115,3 +115,61 @@ app.listen(port, () => {
     console.log(`🚀 Backend-API läuft auf http://localhost:${port}`);
     console.log(`API-Endpunkte: ${API_PREFIX}`);
 });
+
+/**
+ * ✏️ PUT /api/recipes/:id: Ein vorhandenes Rezept aktualisieren
+ */
+app.put(`${API_PREFIX}/:id`, async (req, res) => {
+    const { id } = req.params;
+    const { titel, beschreibung, zutaten, anweisungen } = req.body;
+
+    // Einfache Validierung
+    if (!titel) {
+        return res.status(400).json({ error: 'Der Titel des Rezepts ist erforderlich.' });
+    }
+    
+    // Sicherstellen, dass zutaten ein Array ist, falls es nicht gesendet wird oder null ist
+    const zutatenArray = Array.isArray(zutaten) ? zutaten : [];
+
+    try {
+        const query = `
+            UPDATE rezepte
+            SET titel = $1, beschreibung = $2, zutaten = $3, anweisungen = $4
+            WHERE id = $5
+            RETURNING *;
+        `;
+        const values = [titel, beschreibung, zutatenArray, anweisungen, id];
+        const result = await pool.query(query, values);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: `Rezept mit ID ${id} nicht gefunden.` });
+        }
+
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error(`Fehler beim Aktualisieren des Rezepts mit ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Interner Serverfehler beim Aktualisieren des Rezepts.' });
+    }
+});
+
+
+/**
+ * 🗑️ DELETE /api/recipes/:id: Ein Rezept löschen
+ */
+app.delete(`${API_PREFIX}/:id`, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const result = await pool.query('DELETE FROM rezepte WHERE id = $1 RETURNING id;', [id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: `Rezept mit ID ${id} nicht gefunden.` });
+        }
+        
+        // 204 No Content ist die standardmäßige Antwort für eine erfolgreiche DELETE-Anfrage ohne Rückgabeinhalt
+        res.status(204).send(); 
+    } catch (err) {
+        console.error(`Fehler beim Löschen des Rezepts mit ID ${id}:`, err.message);
+        res.status(500).json({ error: 'Interner Serverfehler beim Löschen des Rezepts.' });
+    }
+});
